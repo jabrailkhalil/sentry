@@ -1,8 +1,8 @@
 """
 Existing .filter().first() occurrences exempt from S025.
 
-New code should use .get_or_none() instead. This list was auto-generated
-and should not be manually edited. To regenerate:
+New code should instead use .get_or_none() or an explicit .order_by().
+This list was auto-generated and should not be manually edited. To regenerate:
 
     python -m tools.flake8_helpers.generate_s025_exceptions
 
@@ -210,7 +210,6 @@ S025_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
         ("src/sentry/users/web/accounts.py", "3875110c031afdd0"),
         ("src/sentry/users/web/accounts.py", "a52a4ba6df4b5e9e"),
         ("src/sentry/utils/mockdata/core.py", "981d079c9e6425dd"),
-        ("src/sentry/workflow_engine/defaults/workflows.py", "1b53a7de6189143a"),
         ("src/sentry/workflow_engine/migration_helpers/alert_rule.py", "3cb235a3e8259811"),
         ("src/sentry/workflow_engine/migration_helpers/alert_rule.py", "601c00313550aff7"),
         ("src/sentry/workflow_engine/migration_helpers/alert_rule.py", "9a4d181891f93b65"),
@@ -234,6 +233,5 @@ S025_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
         ),
         ("src/sentry/workflow_engine/models/incident_groupopenperiod.py", "9bc5eeb110873be0"),
         ("src/sentry/workflow_engine/models/incident_groupopenperiod.py", "d6a5fdeede929979"),
-        ("src/sentry/workflow_engine/processors/detector.py", "fa2630796a748998"),
     }
 )

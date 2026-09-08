@@ -49,8 +49,8 @@ def write_exceptions_file(locations: list[tuple[str, str]]) -> None:
     content = '''"""
 Existing .filter().first() occurrences exempt from S025.
 
-New code should use .get_or_none() instead. This list was auto-generated
-and should not be manually edited. To regenerate:
+New code should instead use .get_or_none() or an explicit .order_by().
+This list was auto-generated and should not be manually edited. To regenerate:
 
     python -m tools.flake8_helpers.generate_s025_exceptions
 
