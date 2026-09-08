@@ -85,6 +85,18 @@ jobs:
           jq '.[]' --raw-output <<< "$ALL_FILES" |
             xargs .venv/bin/prek run -q --files
 
+      # S025 (.filter().first() -> get_or_none()) is warning-level: reported
+      # here but intentionally non-blocking so it can never hold up a merge.
+      - name: Run flake8 S025 (warning only)
+        env:
+          ALL_FILES: ${{ steps.changes.outputs.all_files }}
+        continue-on-error: true
+        run: |
+          mapfile -t PY_FILES < <(jq '.[]' --raw-output <<< "$ALL_FILES" | grep '\.py$')
+          if ((${#PY_FILES[@]})); then
+            .venv/bin/flake8 --select=S025 "${PY_FILES[@]}"
+          fi
+
       - name: Apply any pre-commit fixed files
         # note: this runs "always" or else it's skipped when prek fails
         if: env.SECRET_ACCESS == 'true' && startsWith(github.ref, 'refs/pull') && !github.event.pull_request.draft && always()
