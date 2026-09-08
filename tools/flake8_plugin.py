@@ -931,10 +931,11 @@ class SentryVisitor(ast.NodeVisitor):
 
         # S025: flag .filter(...).first() unless .order_by() is in the chain
         # or the location is in the exceptions list. Exceptions are keyed by a
-        # content fingerprint so they survive line movement.
+        # content fingerprint so they survive line movement, and by a
+        # repo-relative path so absolute invocations (pre-commit, IDE) match.
         if _is_filter_first_chain(node):
             if not _has_order_by_in_chain(node):
-                loc = (self.filename, _s025_fingerprint(node))
+                loc = (_repo_relative(self.filename), _s025_fingerprint(node))
                 if loc not in S025_EXCEPTIONS:
                     self.errors.append((node.lineno, node.col_offset, S025_msg))
 

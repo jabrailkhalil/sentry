@@ -1212,6 +1212,8 @@ class S(serializers.Serializer):
         model = something
         exclude = ["nope"]
 """) == ["1:S023"]
+
+
 def test_S025() -> None:
     from tools.flake8_plugin import S025_msg
 
@@ -1310,15 +1312,21 @@ def test() -> None:
     src = "user = User.objects.filter(id=1).first()\n"
     fp = _s025_fingerprint(_first_call(src))
     excepted_path = "src/sentry/users/models/user.py"
-    original_exceptions = flake8_module.S025_EXCEPTIONS
-    flake8_module.S025_EXCEPTIONS = frozenset({(excepted_path, fp)})
+    # getattr/setattr take the name as a string, so the test can patch the
+    # plugin's private module global without it being a public re-export.
+    original_exceptions = getattr(flake8_module, "S025_EXCEPTIONS")
     try:
+        setattr(flake8_module, "S025_EXCEPTIONS", frozenset({(excepted_path, fp)}))
         assert _run(src, filename=excepted_path) == []
         # Editing the filter changes the fingerprint, so it is flagged again.
         edited = "user = User.objects.filter(email='a@example.com').first()\n"
         assert _run(edited, filename=excepted_path) != []
+        # An absolute path must resolve to the same repo-relative exception key,
+        # matching how pre-commit/prek invoke flake8.
+        abs_path = f"/sentry-src/{excepted_path}"
+        assert _run(src, filename=abs_path) == []
     finally:
-        flake8_module.S025_EXCEPTIONS = original_exceptions
+        setattr(flake8_module, "S025_EXCEPTIONS", original_exceptions)
 
     # Non-exception path/filename should still be flagged
     src = """\
