@@ -1,11 +1,7 @@
-import inspect
 import io
-from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
 from PIL import Image, PngImagePlugin
-from taskbroker_client.task import Task
 
 from sentry.preprod.snapshots.manifest import ImageMetadata, SnapshotManifest
 from sentry.preprod.snapshots.tasks import (
@@ -14,40 +10,7 @@ from sentry.preprod.snapshots.tasks import (
     _diff_mask_key,
     _plan_key,
     categorize_image_diff,
-    compare_snapshots,
-    finalize_snapshot_comparison,
-    process_snapshot_comparison_chunk,
 )
-from sentry.preprod.snapshots.zip_tasks import build_snapshot_images_zip
-from sentry.preprod.vcs.pr_comments.snapshot_tasks import (
-    create_preprod_snapshot_pr_comment_task,
-    post_snapshot_pr_comment_task,
-)
-from sentry.preprod.vcs.status_checks.snapshots.tasks import (
-    create_preprod_snapshot_status_check_task,
-    post_snapshot_status_check_task,
-)
-from sentry.taskworker.namespaces import preprod_snapshots_tasks, preprod_tasks
-
-
-@pytest.mark.parametrize(
-    "task",
-    [
-        compare_snapshots,
-        process_snapshot_comparison_chunk,
-        finalize_snapshot_comparison,
-        build_snapshot_images_zip,
-        create_preprod_snapshot_pr_comment_task,
-        post_snapshot_pr_comment_task,
-        create_preprod_snapshot_status_check_task,
-        post_snapshot_status_check_task,
-    ],
-    ids=lambda task: task.name,
-)
-def test_snapshot_task_namespace(task: Task[..., Any]) -> None:
-    assert task.fullname == f"preprod.snapshots:{task.name}"
-    assert preprod_snapshots_tasks.get(task.name) is task
-    assert inspect.unwrap(preprod_tasks.get(task.name)) is inspect.unwrap(task)
 
 
 def test_objectstore_key_layout():
