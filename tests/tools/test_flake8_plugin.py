@@ -1212,3 +1212,121 @@ class S(serializers.Serializer):
         model = something
         exclude = ["nope"]
 """) == ["1:S023"]
+def test_S025() -> None:
+    from tools.flake8_plugin import S025_msg
+
+    # Basic .filter().first() with args should be flagged
+    src = """\
+from sentry.users.models.user import User
+
+
+def test() -> None:
+    user = User.objects.filter(id=1).first()
+"""
+    assert _run(src) == [f"t.py:5:11: {S025_msg}"]
+
+    # Multiple args to filter should be flagged
+    src = """\
+from sentry.organizations.models import Organization
+
+
+def test() -> None:
+    org = Organization.objects.filter(slug="test", id=1).first()
+"""
+    assert _run(src) == [f"t.py:5:10: {S025_msg}"]
+
+    # .filter() with no args (chained after previous filter) should be flagged
+    src = """\
+from sentry.users.models.user import User
+
+
+def test() -> None:
+    qs = User.objects.filter(id=1)
+    user = qs.filter().first()
+"""
+    assert _run(src) == [f"t.py:6:11: {S025_msg}"]
+
+    # .filter().order_by().first() should NOT be flagged
+    src = """\
+from sentry.models.groupopenperiod import GroupOpenPeriod
+
+
+def test() -> None:
+    result = GroupOpenPeriod.objects.filter(group=1).order_by("-date_started").first()
+"""
+    assert _run(src) == []
+
+    # .order_by() earlier in the chain should also suppress
+    src = """\
+from sentry.models.groupopenperiod import GroupOpenPeriod
+
+
+def test() -> None:
+    result = GroupOpenPeriod.objects.order_by("-date_started").filter(group=1).first()
+"""
+    assert _run(src) == []
+
+    # .get_or_none() should not trigger
+    src = """\
+from sentry.users.models.user import User
+
+
+def test() -> None:
+    user = User.objects.get_or_none(id=1)
+"""
+    assert _run(src) == []
+
+    # .first() without .filter() should not trigger
+    src = """\
+from sentry.models.groupopenperiod import GroupOpenPeriod
+
+
+def test() -> None:
+    result = GroupOpenPeriod.objects.order_by("-date_started").first()
+"""
+    assert _run(src) == []
+
+    # Exceptions are keyed by (path, fingerprint) so line movement is fine.
+    from tools import flake8_plugin as flake8_module
+    from tools.flake8_plugin import _s025_fingerprint
+
+    def _first_call(source: str) -> ast.Call:
+        for node in ast.walk(ast.parse(source)):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "first"
+            ):
+                return node
+        raise AssertionError("no .first() call found")
+
+    # Same statement on different lines -> same fingerprint.
+    stmt = "user = User.objects.filter(id=1).first()\n"
+    assert _s025_fingerprint(_first_call(f"a = 1\n{stmt}")) == _s025_fingerprint(
+        _first_call(f"\n{stmt}b = 2\n")
+    )
+
+    # Suppressed when (path, fingerprint) is excepted, regardless of line number.
+    src = "user = User.objects.filter(id=1).first()\n"
+    fp = _s025_fingerprint(_first_call(src))
+    excepted_path = "src/sentry/users/models/user.py"
+    original_exceptions = flake8_module.S025_EXCEPTIONS
+    flake8_module.S025_EXCEPTIONS = frozenset({(excepted_path, fp)})
+    try:
+        assert _run(src, filename=excepted_path) == []
+        # Editing the filter changes the fingerprint, so it is flagged again.
+        edited = "user = User.objects.filter(email='a@example.com').first()\n"
+        assert _run(edited, filename=excepted_path) != []
+    finally:
+        flake8_module.S025_EXCEPTIONS = original_exceptions
+
+    # Non-exception path/filename should still be flagged
+    src = """\
+from sentry.users.models.user import User
+
+
+def test() -> None:
+    user = User.objects.filter(id=1).first()
+"""
+    errors = _run(src, filename="tests/sentry/test_example.py")
+    assert any("S025" in e for e in errors)

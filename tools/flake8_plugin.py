@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 from collections.abc import Generator
 from datetime import datetime, timezone
 from typing import Any
+
+from tools.flake8_helpers.s025_exceptions import S025_EXCEPTIONS
 
 S001_fmt = (
     "S001 Avoid using the {} mock call as it is "
@@ -105,6 +108,50 @@ S020_eap_base_classes = frozenset(
         "OrganizationEventsTraceEndpointBase",
     )
 )
+
+
+S025_msg = (
+    "S025 Use .get_or_none() instead of .filter(...).first() when querying "
+    "for a single unique row. Prefer .get_or_none() to avoid silently "
+    "returning the wrong row when the query would match multiple rows."
+)
+
+
+def _has_order_by_in_chain(node: ast.Call) -> bool:
+    """Walk up the chain of chained calls to detect .order_by()."""
+    if not isinstance(node.func, ast.Attribute):
+        return False
+    if node.func.attr == "order_by":
+        return True
+    if isinstance(node.func.value, ast.Call):
+        return _has_order_by_in_chain(node.func.value)
+    return False
+
+
+def _is_filter_first_chain(node: ast.Call) -> bool:
+    """True when this Call is `.filter(...).first()` applied to an attribute."""
+    return (
+        isinstance(node.func, ast.Attribute)
+        and node.func.attr == "first"
+        and isinstance(node.func.value, ast.Call)
+        and isinstance(node.func.value.func, ast.Attribute)
+        and node.func.value.func.attr == "filter"
+    )
+
+
+def _s025_fingerprint(node: ast.Call) -> str:
+    """Stable, position-independent fingerprint for a `.filter(...).first()` chain.
+
+    Encodes the full `.filter(...)` call expression (excluding positions), so
+    moving the statement to a different line does not change the fingerprint,
+    while editing the filter does. Used to key S025 exceptions so the list is
+    robust to code movement.
+    """
+    func = node.func
+    assert isinstance(func, ast.Attribute)
+    inner = func.value
+    assert isinstance(inner, ast.Call)
+    return hashlib.sha256(ast.dump(inner, include_attributes=False).encode()).hexdigest()[:16]
 
 
 # --- S015: do not hardcode current or future UTC year as test "now" ---
@@ -878,6 +925,15 @@ class SentryVisitor(ast.NodeVisitor):
             and node.func.value.value.id == "self"
         ):
             self.errors.append((node.lineno, node.col_offset, S020_msg))
+
+        # S025: flag .filter(...).first() unless .order_by() is in the chain
+        # or the location is in the exceptions list. Exceptions are keyed by a
+        # content fingerprint so they survive line movement.
+        if _is_filter_first_chain(node):
+            if not _has_order_by_in_chain(node):
+                loc = (self.filename, _s025_fingerprint(node))
+                if loc not in S025_EXCEPTIONS:
+                    self.errors.append((node.lineno, node.col_offset, S025_msg))
 
         self.generic_visit(node)
 
