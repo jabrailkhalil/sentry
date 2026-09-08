@@ -35,10 +35,9 @@ repos:
       # Keep flake8 ONLY for custom Sentry S* rules.
       # Ruff doesn't support custom AST-based plugins.
       # Configuration for flake8 S* rules exists in setup.cfg.
-      # Skips S025: display in pre-commit, don't block CI
       - id: flake8-sentry
         name: flake8 (sentry rules)
-        entry: uv run flake8 --select=S --ignore=S025
+        entry: uv run flake8 --select=S
         language: system
         types: [python]
         require_serial: true
