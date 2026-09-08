@@ -110,10 +110,13 @@ S020_eap_base_classes = frozenset(
 )
 
 
+# Using .first() will silently add an ORDER BY to the query so Django can be consistent
+# about which row is returned. On the wrong table/callsite, this can cause issues. Defer
+# to get_or_none() to skip the DoesNotExist exception, or be explicit about ordering instead.
 S025_msg = (
     "S025 Use .get_or_none() instead of .filter(...).first() when querying "
-    "for a single unique row. Prefer .get_or_none() to avoid silently "
-    "returning the wrong row when the query would match multiple rows."
+    "for a single unique row. If multiple similar rows exist, use an explicit "
+    ".order_by(...) before .first() to fetch a specific row."
 )
 
 
