@@ -53,6 +53,28 @@ class OrganizationWorkflowIndexGetTest(OrganizationWorkflowDetailsBaseTest):
         response = self.get_success_response(self.organization.slug, workflow.id)
         assert response.data == serialize(workflow)
 
+    def test_expand_project_ids(self) -> None:
+        workflow = self.create_workflow(organization_id=self.organization.id)
+        detector = self.create_detector(project=self.project)
+        self.create_detector_workflow(workflow=workflow, detector=detector)
+
+        response = self.get_success_response(
+            self.organization.slug,
+            workflow.id,
+            qs_params=[("expand", "other"), ("expand", "projectIds")],
+        )
+
+        assert response.data["projectIds"] == [str(self.project.id)]
+
+    def test_unrelated_expansion_omits_project_ids(self) -> None:
+        workflow = self.create_workflow(organization_id=self.organization.id)
+
+        response = self.get_success_response(
+            self.organization.slug, workflow.id, qs_params={"expand": "other"}
+        )
+
+        assert "projectIds" not in response.data
+
     def test_does_not_exist(self) -> None:
         self.get_error_response(self.organization.slug, 3, status_code=404)
 
@@ -68,9 +90,12 @@ class OrganizationWorkflowIndexGetTest(OrganizationWorkflowDetailsBaseTest):
         detector = ensure_default_all_projects_detector(self.organization.id)
         self.create_detector_workflow(workflow=workflow, detector=detector)
 
-        response = self.get_success_response(self.organization.slug, workflow.id)
+        response = self.get_success_response(
+            self.organization.slug, workflow.id, qs_params={"expand": "projectIds"}
+        )
 
         assert response.data["id"] == str(workflow.id)
+        assert response.data["projectIds"] == [None]
 
     def test_all_projects_workflow_without_feature(self) -> None:
         workflow = self.create_workflow(organization_id=self.organization.id)
@@ -326,6 +351,20 @@ class OrganizationUpdateWorkflowTest(OrganizationWorkflowDetailsBaseTest, BaseWo
             self.organization.slug, self.workflow.id, raw_data=self.valid_workflow
         )
         assert response.status_code == 200
+
+    def test_update_with_project_ids_expansion(self) -> None:
+        detector = self.create_detector(project=self.project)
+        self.create_detector_workflow(workflow=self.workflow, detector=detector)
+
+        response = self.get_success_response(
+            self.organization.slug,
+            self.workflow.id,
+            qs_params={"expand": "projectIds"},
+            raw_data={"name": "Updated Workflow"},
+        )
+
+        assert response.data["name"] == "Updated Workflow"
+        assert response.data["projectIds"] == [str(self.project.id)]
 
     def test_update_owner(self) -> None:
         assert self.workflow.owner_team_id is None
@@ -1686,6 +1725,21 @@ class OrganizationWorkflowDetailsProjectAccessTest(APITestCase, ProjectAccessTes
         super().setUp()
         self.setup_project_access_test_data()
 
+    def test_project_ids_include_inaccessible_projects(self) -> None:
+        mixed_workflow = self.create_workflow(organization_id=self.organization.id)
+        self.create_detector_workflow(workflow=mixed_workflow, detector=self.user_detector)
+        self.create_detector_workflow(workflow=mixed_workflow, detector=self.other_detector)
+        self.login_as(self.limited_user)
+
+        response = self.get_success_response(
+            self.organization.slug, mixed_workflow.id, qs_params={"expand": "projectIds"}
+        )
+
+        assert set(response.data["projectIds"]) == {
+            str(self.user_project.id),
+            str(self.other_project.id),
+        }
+
     def test_get_cannot_access_workflow_from_inaccessible_project(self) -> None:
         """
         Test that users cannot GET workflows connected only to projects they don't have access to.
@@ -1710,21 +1764,26 @@ class OrganizationWorkflowDetailsProjectAccessTest(APITestCase, ProjectAccessTes
         response = self.get_success_response(
             self.organization.slug,
             self.user_workflow.id,
+            qs_params={"expand": "projectIds"},
         )
         assert response.data["id"] == str(self.user_workflow.id)
+        assert response.data["projectIds"] == [str(self.user_project.id)]
 
     def test_get_can_access_unattached_workflow(self) -> None:
         """
         Test that users can access workflows with no detector connections (org-level workflows).
         """
+        self.organization.update_option("sentry:alerts_member_write", False)
         self.login_as(self.limited_user)
 
         # User SHOULD be able to get unattached workflows
         response = self.get_success_response(
             self.organization.slug,
             self.unattached_workflow.id,
+            qs_params={"expand": "projectIds"},
         )
         assert response.data["id"] == str(self.unattached_workflow.id)
+        assert response.data["projectIds"] == []
 
     def test_put_cannot_modify_workflow_from_inaccessible_project(self) -> None:
         """

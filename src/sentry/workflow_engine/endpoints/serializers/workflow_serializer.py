@@ -1,7 +1,7 @@
 from collections import defaultdict
 from collections.abc import Mapping, MutableMapping, Sequence
 from datetime import datetime
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from sentry.api.serializers import Serializer, register, serialize
 from sentry.api.serializers.rest_framework.base import convert_dict_key_case, snake_to_camel_case
@@ -51,6 +51,8 @@ class WorkflowSerializerResponse(TypedDict):
     environment: str | None
     config: dict[str, Any]
     detectorIds: list[str] | None
+    # None represents a connection to an all-project detector.
+    projectIds: NotRequired[list[str | None]]
     enabled: bool
     lastTriggered: datetime | None
     owner: str | None
@@ -93,6 +95,21 @@ class WorkflowSerializer(Serializer[WorkflowSerializerResponse]):
         for detector_id, workflow_id in detector_workflows:
             detectors_map[workflow_id].append(str(detector_id))
 
+        if kwargs.get("include_project_ids", False):
+            projects_map: dict[int, list[str | None]] = defaultdict(list)
+            workflow_projects = (
+                DetectorWorkflow.objects.filter(workflow__in=item_list)
+                .order_by("workflow_id", "detector__project_id")
+                .values_list("workflow_id", "detector__project_id")
+                .distinct()
+            )
+            for workflow_id, project_id in workflow_projects:
+                projects_map[workflow_id].append(
+                    str(project_id) if project_id is not None else None
+                )
+            for item in item_list:
+                attrs[item]["projectIds"] = projects_map[item.id]
+
         for item in item_list:
             attrs[item]["triggers"] = trigger_condition_map.get(
                 item.when_condition_group_id
@@ -111,7 +128,7 @@ class WorkflowSerializer(Serializer[WorkflowSerializerResponse]):
     def serialize(
         self, obj: Workflow, attrs: Mapping[str, Any], user: Any, **kwargs: Any
     ) -> WorkflowSerializerResponse:
-        return {
+        result: WorkflowSerializerResponse = {
             "id": str(obj.id),
             "name": str(obj.name),
             "organizationId": str(obj.organization_id),
@@ -127,3 +144,7 @@ class WorkflowSerializer(Serializer[WorkflowSerializerResponse]):
             "lastTriggered": attrs.get("lastTriggered"),
             "owner": attrs.get("owner"),
         }
+
+        if "projectIds" in attrs:
+            result["projectIds"] = attrs["projectIds"]
+        return result

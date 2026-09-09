@@ -49,6 +49,7 @@ class OrganizationWorkflowDetailsEndpoint(OrganizationWorkflowEndpoint):
         parameters=[
             GlobalParams.ORG_ID_OR_SLUG,
             WorkflowParams.WORKFLOW_ID,
+            WorkflowParams.EXPAND,
         ],
         responses={
             200: WorkflowSerializer,
@@ -69,6 +70,7 @@ class OrganizationWorkflowDetailsEndpoint(OrganizationWorkflowEndpoint):
             workflow,
             request.user,
             WorkflowSerializer(),
+            include_project_ids="projectIds" in request.GET.getlist("expand"),
         )
         return Response(serialized_workflow)
 
@@ -78,6 +80,7 @@ class OrganizationWorkflowDetailsEndpoint(OrganizationWorkflowEndpoint):
         parameters=[
             GlobalParams.ORG_ID_OR_SLUG,
             WorkflowParams.WORKFLOW_ID,
+            WorkflowParams.EXPAND,
         ],
         request=WorkflowValidator,
         responses={
@@ -121,7 +124,12 @@ class OrganizationWorkflowDetailsEndpoint(OrganizationWorkflowEndpoint):
         workflow.refresh_from_db()
 
         return Response(
-            serialize(workflow, request.user, WorkflowSerializer()),
+            serialize(
+                workflow,
+                request.user,
+                WorkflowSerializer(),
+                include_project_ids="projectIds" in request.GET.getlist("expand"),
+            ),
             status=200,
         )
 

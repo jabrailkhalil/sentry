@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from sentry.api.serializers import serialize
+from sentry.incidents.grouptype import MetricIssue
 from sentry.notifications.models.notificationaction import ActionTarget
 from sentry.testutils.cases import TestCase
 from sentry.testutils.skips import requires_snuba
@@ -158,3 +159,26 @@ class TestWorkflowSerializer(TestCase):
             "lastTriggered": history.date_added,
             "owner": None,
         }
+
+    def test_project_ids_are_distinct_and_scoped_to_each_workflow(self) -> None:
+        workflow = self.create_workflow(organization_id=self.organization.id)
+        other_workflow = self.create_workflow(organization_id=self.organization.id)
+        unattached_workflow = self.create_workflow(organization_id=self.organization.id)
+        other_project = self.create_project(organization=self.organization)
+        for _ in range(3):
+            detector = self.create_detector(project=self.project, type=MetricIssue.slug)
+            self.create_detector_workflow(workflow=workflow, detector=detector)
+        other_detector = self.create_detector(project=other_project)
+        self.create_detector_workflow(workflow=other_workflow, detector=other_detector)
+        all_projects_detector = self.create_all_projects_detector(organization=self.organization)
+        self.create_detector_workflow(workflow=workflow, detector=all_projects_detector)
+
+        result = serialize(
+            [workflow, other_workflow, unattached_workflow], include_project_ids=True
+        )
+
+        assert result[0]["projectIds"] == [str(self.project.id), None]
+        assert result[1]["projectIds"] == [str(other_project.id)]
+        assert result[2]["projectIds"] == []
+        assert "projectIds" not in serialize(workflow)
+        assert "canEdit" not in result[0]

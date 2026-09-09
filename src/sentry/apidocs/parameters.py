@@ -583,6 +583,16 @@ Prefix with `-` to sort in descending order.
 
 
 class WorkflowParams:
+    EXPAND = OpenApiParameter(
+        name="expand",
+        location=OpenApiParameter.QUERY,
+        required=False,
+        type=OpenApiTypes.STR,
+        many=True,
+        enum=["projectIds"],
+        description="Additional data to include in the response.",
+    )
+
     WORKFLOW_ID = OpenApiParameter(
         name="workflow_id",
         location="path",
