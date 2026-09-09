@@ -62,6 +62,16 @@ function getCommitSummary(commitCount: number, authorCount: number) {
       });
 }
 
+/**
+ * Lets the summary grid derive its own column count from the width it actually
+ * has instead of from a breakpoint: `auto-fit` lays down as many tracks as clear
+ * SECTION_MIN_WIDTH and stretches them to fill the row, so the embed reflows
+ * continuously rather than at a few fixed steps. `min(..., 100%)` keeps the
+ * track from overflowing a container narrower than the minimum itself.
+ */
+const SECTION_MIN_WIDTH = '180px';
+const SUMMARY_COLUMNS = `repeat(auto-fit, minmax(min(${SECTION_MIN_WIDTH}, 100%), 1fr))`;
+
 export function ReleaseBlock({version, projectId}: ReleaseData) {
   const organization = useOrganization();
   const releaseQuery = useQuery(
@@ -102,8 +112,6 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
           ?.newGroups ?? 0)
       : (release?.newGroups ?? 0);
   const lastCommitTitle = release?.lastCommit?.message?.split(/\r?\n/, 1)[0];
-  const sectionCount =
-    4 + Number((release?.commitCount ?? 0) > 0) + Number(Boolean(release?.lastCommit));
 
   return (
     <Container
@@ -117,13 +125,17 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
     >
       <Stack gap="lg">
         <Flex align="center" gap="sm" justify="between">
-          <ReleaseLink version={version} projectId={projectId} />
-          <CopyToClipboardButton
-            aria-label={t('Copy release version to clipboard')}
-            size="zero"
-            text={version}
-            variant="transparent"
-          />
+          <Text ellipsis>
+            <ReleaseLink version={version} projectId={projectId} />
+          </Text>
+          <Flex flexShrink="0">
+            <CopyToClipboardButton
+              aria-label={t('Copy release version to clipboard')}
+              size="zero"
+              text={version}
+              variant="transparent"
+            />
+          </Flex>
         </Flex>
 
         {releaseQuery.isPending ? (
@@ -133,15 +145,8 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
         ) : releaseQuery.isError || !release ? (
           <Text variant="muted">{t('Unable to load release details')}</Text>
         ) : (
-          <Grid
-            columns={{
-              zero: 'minmax(0, 1fr)',
-              sm: 'repeat(2, minmax(0, 1fr))',
-              lg: `repeat(${sectionCount}, minmax(0, 1fr))`,
-            }}
-            gap="xl"
-          >
-            <Stack gap="xs">
+          <Grid columns={SUMMARY_COLUMNS} gap="xl">
+            <Stack gap="xs" minWidth="0">
               <Text bold size="xs" uppercase variant="muted">
                 {t('New Issues')}
               </Text>
@@ -150,7 +155,7 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
               </Text>
             </Stack>
 
-            <Stack gap="xs">
+            <Stack gap="xs" minWidth="0">
               <Text bold size="xs" uppercase variant="muted">
                 {t('Date Created')}
               </Text>
@@ -159,7 +164,7 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
               </Text>
             </Stack>
 
-            <Stack gap="xs">
+            <Stack gap="xs" minWidth="0">
               <Text bold size="xs" uppercase variant="muted">
                 {t('Package')}
               </Text>
@@ -167,7 +172,7 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
             </Stack>
 
             {release.commitCount > 0 ? (
-              <Stack gap="sm">
+              <Stack gap="sm" minWidth="0">
                 <Text bold size="xs" uppercase variant="muted">
                   {getCommitSummary(release.commitCount, release.authors.length)}
                 </Text>
@@ -178,11 +183,7 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
             ) : null}
 
             {release.lastCommit ? (
-              <Stack
-                column={{zero: 'auto', sm: 'span 2', lg: 'auto'}}
-                gap="xs"
-                minWidth="0"
-              >
+              <Stack column={{zero: 'auto', sm: 'span 2'}} gap="xs" minWidth="0">
                 <Text bold size="xs" uppercase variant="muted">
                   {t('Last Commit')}
                 </Text>
@@ -197,23 +198,21 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
                 </Text>
                 <Flex align="center" gap="xs" minWidth="0">
                   {release.lastCommit.author ? (
-                    <UserAvatar size={16} user={release.lastCommit.author} />
+                    <Flex flexShrink="0">
+                      <UserAvatar size={16} user={release.lastCommit.author} />
+                    </Flex>
                   ) : null}
                   <Text bold ellipsis size="sm">
                     {release.lastCommit.author?.name ?? t('Unknown author')}
                   </Text>
-                  <Text size="sm" variant="muted">
+                  <Text size="sm" variant="muted" wrap="nowrap">
                     <TimeSince date={release.lastCommit.dateCreated} />
                   </Text>
                 </Flex>
               </Stack>
             ) : null}
 
-            <Stack
-              column={{zero: 'auto', sm: 'span 2', lg: 'auto'}}
-              gap="xs"
-              minWidth="0"
-            >
+            <Stack column={{zero: 'auto', sm: 'span 2'}} gap="xs" minWidth="0">
               <Text bold size="xs" uppercase variant="muted">
                 {t('Deploys')}
               </Text>
@@ -228,9 +227,9 @@ export function ReleaseBlock({version, projectId}: ReleaseData) {
               ) : recentDeploys.length > 0 ? (
                 <Flex align="center" gap="md" wrap="wrap">
                   {recentDeploys.map(deploy => (
-                    <Flex key={deploy.id} align="center" gap="xs">
+                    <Flex key={deploy.id} align="center" gap="xs" minWidth="0">
                       <Tag variant="info">{deploy.environment}</Tag>
-                      <Text size="sm" variant="muted">
+                      <Text size="sm" variant="muted" wrap="nowrap">
                         <TimeSince date={deploy.dateFinished} />
                       </Text>
                     </Flex>
