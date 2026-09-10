@@ -5,6 +5,7 @@ import {parseAsStringLiteral, useQueryState} from 'nuqs';
 import {normalizeDateTimeParams} from 'sentry/components/pageFilters/parse';
 import {usePageFilters} from 'sentry/components/pageFilters/usePageFilters';
 import {apiOptions, selectJsonWithHeaders} from 'sentry/utils/api/apiOptions';
+import {FieldValueType} from 'sentry/utils/fields';
 import {useOrganization} from 'sentry/utils/useOrganization';
 import {useCombinedQuery} from 'sentry/views/insights/pages/agents/hooks/useCombinedQuery';
 import {useTableCursor} from 'sentry/views/insights/pages/agents/hooks/useTableCursor';
@@ -55,15 +56,69 @@ interface ConversationApiResponse extends Omit<
 
 const CONVERSATION_LIST_PER_PAGE = 50;
 
-const CONVERSATION_SORT_FIELDS = [
-  'age',
-  'generationDuration',
-  'llmCalls',
-  'errors',
-  'totalCost',
-] as const;
+export const CONVERSATION_FIELDS = {
+  conversationId: {
+    key: 'conversation.conversationId',
+    valueType: FieldValueType.STRING,
+  },
+  age: {
+    key: 'conversation.age',
+    valueType: FieldValueType.DATE,
+    sortable: true,
+  },
+  duration: {
+    key: 'conversation.duration',
+    valueType: FieldValueType.DURATION,
+  },
+  generationDuration: {
+    key: 'conversation.generationDuration',
+    valueType: FieldValueType.DURATION,
+    sortable: true,
+  },
+  errors: {
+    key: 'conversation.errors',
+    valueType: FieldValueType.INTEGER,
+    sortable: true,
+  },
+  llmCalls: {
+    key: 'conversation.llmCalls',
+    valueType: FieldValueType.INTEGER,
+    sortable: true,
+  },
+  toolCalls: {
+    key: 'conversation.toolCalls',
+    valueType: FieldValueType.INTEGER,
+  },
+  totalTokens: {
+    key: 'conversation.totalTokens',
+    valueType: FieldValueType.INTEGER,
+  },
+  inputTokens: {
+    key: 'conversation.inputTokens',
+    valueType: FieldValueType.INTEGER,
+  },
+  outputTokens: {
+    key: 'conversation.outputTokens',
+    valueType: FieldValueType.INTEGER,
+  },
+  totalCost: {
+    key: 'conversation.totalCost',
+    valueType: FieldValueType.CURRENCY,
+    sortable: true,
+  },
+  toolErrors: {
+    key: 'conversation.toolErrors',
+    valueType: FieldValueType.INTEGER,
+  },
+} as const;
 
-export type ConversationSortField = (typeof CONVERSATION_SORT_FIELDS)[number];
+type ConversationField = (typeof CONVERSATION_FIELDS)[keyof typeof CONVERSATION_FIELDS];
+type SortableConversationField = Extract<ConversationField, {sortable: true}>;
+export type ConversationSortField = SortableConversationField['key'];
+
+const CONVERSATION_SORT_FIELDS = Object.values(CONVERSATION_FIELDS)
+  .filter((field): field is SortableConversationField => 'sortable' in field)
+  .map(field => field.key);
 
 const CONVERSATION_SORTS = CONVERSATION_SORT_FIELDS.flatMap(field => [
   field,
@@ -88,7 +143,9 @@ export function useConversations() {
   );
   const [sort, setSort] = useQueryState(
     'sort',
-    parseAsStringLiteral(CONVERSATION_SORTS).withDefault('-age')
+    parseAsStringLiteral(CONVERSATION_SORTS).withDefault(
+      `-${CONVERSATION_FIELDS.age.key}`
+    )
   );
 
   const {

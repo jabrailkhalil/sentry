@@ -12,6 +12,8 @@ import {Tooltip} from '@sentry/scraps/tooltip';
 import Feature from 'sentry/components/acl/feature';
 import {DropdownMenu, type MenuItemProps} from 'sentry/components/dropdownMenu';
 import {usePageFilters} from 'sentry/components/pageFilters/usePageFilters';
+import {parseSearch, Token} from 'sentry/components/searchSyntax/parser';
+import {getKeyName} from 'sentry/components/searchSyntax/utils';
 import {IconClock, IconContract, IconEllipsis, IconExpand, IconGraph} from 'sentry/icons';
 import {t} from 'sentry/locale';
 import type {NewQuery} from 'sentry/types/organization';
@@ -42,6 +44,7 @@ import {Line} from 'sentry/views/dashboards/widgets/timeSeriesWidget/plottables/
 import {TimeSeriesWidgetVisualization} from 'sentry/views/dashboards/widgets/timeSeriesWidget/timeSeriesWidgetVisualization';
 import {Widget} from 'sentry/views/dashboards/widgets/widget/widget';
 import {handleAddQueryToDashboard} from 'sentry/views/discover/utils';
+import {CONVERSATION_FIELDS} from 'sentry/views/explore/conversations/hooks/useConversations';
 import {Referrer} from 'sentry/views/explore/conversations/utils/referrers';
 import {getAlertsUrl} from 'sentry/views/insights/common/utils/getAlertsUrl';
 import {useCombinedQuery} from 'sentry/views/insights/pages/agents/hooks/useCombinedQuery';
@@ -50,6 +53,18 @@ import {SpanFields} from 'sentry/views/insights/types';
 
 const CONVERSATION_SPANS_FILTER = `has:${SpanFields.GEN_AI_CONVERSATION_ID}`;
 const AI_CLIENT_FILTER = `${SpanFields.GEN_AI_OPERATION_TYPE}:ai_client`;
+const CONVERSATION_ALIAS_KEYS = new Set<string>(
+  Object.values(CONVERSATION_FIELDS).map(field => field.key)
+);
+
+function hasConversationAliasFilter(query: string): boolean {
+  return Boolean(
+    parseSearch(query, {flattenParenGroups: true})?.some(
+      token =>
+        token.type === Token.FILTER && CONVERSATION_ALIAS_KEYS.has(getKeyName(token.key))
+    )
+  );
+}
 
 const CHART_VISUALIZATIONS = {
   chats: {
@@ -114,12 +129,14 @@ export function ConversationsChart() {
 
   const {label, yAxis, filter} = CHART_VISUALIZATIONS[visualization];
   const query = useCombinedQuery(filter);
+  const chartDisabled = hasConversationAliasFilter(query);
 
   const {data, isPending, error} = useFetchSpanTimeSeries(
     {
       yAxis: [yAxis],
       query,
       interval,
+      enabled: chartDisabled ? false : undefined,
     },
     Referrer.CHART
   );
@@ -162,7 +179,9 @@ export function ConversationsChart() {
   // When collapsed, drop the interactive dropdown for a compact title and keep
   // the trend visible as a mini sparkline that fits the header, mirroring the
   // logs chart.
-  const Title = collapsed ? (
+  const Title = chartDisabled ? (
+    <Widget.WidgetTitle title={label} />
+  ) : collapsed ? (
     <Widget.WidgetTitle
       title={label}
       summary={
@@ -180,7 +199,7 @@ export function ConversationsChart() {
     visualizationSelect
   );
 
-  const Actions = collapsed ? (
+  const Actions = chartDisabled ? null : collapsed ? (
     <Button
       aria-label={t('Expand chart')}
       icon={<IconExpand />}
@@ -240,7 +259,15 @@ export function ConversationsChart() {
     </Fragment>
   );
 
-  const Visualization = isPending ? (
+  const Visualization = chartDisabled ? (
+    <Container position="absolute" inset={0}>
+      <Widget.WidgetError
+        error={t(
+          "This chart doesn't support conversation-level filters. Remove them to view chart data."
+        )}
+      />
+    </Container>
+  ) : isPending ? (
     <TimeSeriesWidgetVisualization.LoadingPlaceholder />
   ) : error ? (
     <Container position="absolute" inset={0}>
@@ -258,8 +285,8 @@ export function ConversationsChart() {
     <Widget
       Title={Title}
       Actions={Actions}
-      Visualization={collapsed ? null : Visualization}
-      height={collapsed ? 50 : 195}
+      Visualization={collapsed && !chartDisabled ? null : Visualization}
+      height={collapsed && !chartDisabled ? 50 : 195}
       revealActions="always"
     />
   );
