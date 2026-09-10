@@ -233,7 +233,7 @@ preprod_tasks = app.taskregistry.create_namespace(
 
 preprod_snapshots_tasks = app.taskregistry.create_namespace(
     "preprod.snapshots",
-    app_feature="preprod",
+    app_feature="snapshots",
 )
 
 profiling_tasks = app.taskregistry.create_namespace(
